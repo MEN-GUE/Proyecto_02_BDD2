@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from database import close_driver, verify_connection
-from routers import nodes, relationships
+from routers import nodes, relationships, cypher, aggregations
 
 
 @asynccontextmanager
@@ -24,6 +24,8 @@ app = FastAPI(
 
 app.include_router(nodes.router)
 app.include_router(relationships.router)
+app.include_router(cypher.router)
+app.include_router(aggregations.router)
 
 
 @app.get("/")
