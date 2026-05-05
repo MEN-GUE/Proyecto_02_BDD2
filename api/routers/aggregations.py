@@ -13,12 +13,9 @@ def get_node_counts():
     ORDER BY value DESC
     """
 
-    try:
-        with get_driver().session() as session:
-            result = session.run(query)
-            return [dict(record) for record in result]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    with get_driver().session() as session:
+        result = session.run(query)
+        return [dict(record) for record in result]
 
 
 @router.get("/{type}")
@@ -36,16 +33,26 @@ def get_aggregation(type: str):
             ORDER BY value DESC
             LIMIT 10
         """,
-        "orders-by-status": """
+        "order-status": """
             MATCH (o:Orden)
             RETURN o.estado AS label, count(o) AS value
             ORDER BY value DESC
         """,
-        "products-by-category": """
-            MATCH (p:Producto)-[:PERTENECE_A]->(c:Categoria)
-            RETURN c.nombre AS label, count(p) AS value
+        "client-segments": """
+            MATCH (c:Cliente)
+            RETURN c.segmento AS label, count(c) AS value
             ORDER BY value DESC
-            LIMIT 10
+        """,
+        "supplier-rating": """
+            MATCH (p:Proveedor)
+            RETURN 
+                CASE 
+                    WHEN p.calificacion >= 4 THEN 'Alta'
+                    WHEN p.calificacion >= 2.5 THEN 'Media'
+                    ELSE 'Baja'
+                END AS label,
+                count(p) AS value
+            ORDER BY value DESC
         """,
     }
 
