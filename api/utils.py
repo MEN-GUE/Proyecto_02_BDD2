@@ -30,6 +30,9 @@ def relationship_to_dict(rel, start_id=None, end_id=None):
 
 
 def build_set_clause(alias: str, properties: dict):
+    for key in properties.keys():
+        validate_cypher_name(key)
+
     return ", ".join([f"{alias}.{key} = ${key}" for key in properties.keys()])
 
 

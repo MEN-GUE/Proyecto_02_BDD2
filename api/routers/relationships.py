@@ -32,6 +32,11 @@ def get_relationships(
         type = validate_cypher_name(type)
         type_clause = f":{type}"
 
+    count_query = f"""
+    MATCH ()-[r{type_clause}]->()
+    RETURN count(r) AS total
+    """
+
     query = f"""
     MATCH ()-[r{type_clause}]->()
     WITH r
@@ -41,13 +46,8 @@ def get_relationships(
     RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
     """
 
-    count_query = f"""
-    MATCH ()-[r{type_clause}]->()
-    RETURN count(r) AS total
-    """
-
     with get_driver().session() as session:
-        total = session.run(count_query, **params).single()["total"]
+        total = session.run(count_query).single()["total"]
         result = session.run(query, **params)
 
         relationships = [
@@ -70,13 +70,18 @@ def create_relationship(payload: CreateRelationshipRequest):
     rel_type = validate_cypher_name(payload.type)
 
     if len(payload.properties) < 3:
-        raise HTTPException(status_code=400, detail="La relación debe tener mínimo 3 propiedades")
+        raise HTTPException(
+            status_code=400,
+            detail="La relación debe tener mínimo 3 propiedades",
+        )
+
+    set_clause = build_set_clause("r", payload.properties)
 
     query = f"""
     MATCH (a {{id: $fromId}})
     MATCH (b {{id: $toId}})
     CREATE (a)-[r:{rel_type}]->(b)
-    SET {build_set_clause("r", payload.properties)}
+    SET {set_clause}
     RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
     """
 
@@ -90,65 +95,37 @@ def create_relationship(payload: CreateRelationshipRequest):
         record = session.run(query, **params).single()
 
         if record is None:
-            raise HTTPException(status_code=404, detail="No se encontraron los nodos")
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontraron los nodos",
+            )
 
-        return relationship_to_dict(record["r"], record["startNodeId"], record["endNodeId"])
-
-
-@router.patch("/{relationship_id}/properties")
-def update_relationship_properties(relationship_id: str, payload: UpdatePropertiesRequest):
-    query = f"""
-    MATCH ()-[r]->()
-    WHERE id(r) = toInteger($id)
-    SET {build_set_clause("r", payload.properties)}
-    RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
-    """
-
-    params = {"id": relationship_id, **payload.properties}
-
-    with get_driver().session() as session:
-        record = session.run(query, **params).single()
-
-        if record is None:
-            raise HTTPException(status_code=404, detail="Relación no encontrada")
-
-        return relationship_to_dict(record["r"], record["startNodeId"], record["endNodeId"])
+        return relationship_to_dict(
+            record["r"],
+            record["startNodeId"],
+            record["endNodeId"],
+        )
 
 
 @router.patch("/bulk/properties")
 def bulk_update_relationship_properties(payload: BulkUpdatePropertiesRequest):
+    set_clause = build_set_clause("r", payload.properties)
+
     query = f"""
     MATCH ()-[r]->()
     WHERE toString(id(r)) IN $ids
-    SET {build_set_clause("r", payload.properties)}
+    SET {set_clause}
     RETURN count(r) AS updated
     """
 
-    params = {"ids": payload.ids, **payload.properties}
+    params = {
+        "ids": payload.ids,
+        **payload.properties,
+    }
 
     with get_driver().session() as session:
         record = session.run(query, **params).single()
         return {"updated": record["updated"]}
-
-
-@router.delete("/{relationship_id}/properties")
-def delete_relationship_properties(relationship_id: str, payload: DeletePropertiesRequest):
-    remove_clause = build_remove_clause("r", payload.keys)
-
-    query = f"""
-    MATCH ()-[r]->()
-    WHERE id(r) = toInteger($id)
-    REMOVE {remove_clause}
-    RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
-    """
-
-    with get_driver().session() as session:
-        record = session.run(query, id=relationship_id).single()
-
-        if record is None:
-            raise HTTPException(status_code=404, detail="Relación no encontrada")
-
-        return relationship_to_dict(record["r"], record["startNodeId"], record["endNodeId"])
 
 
 @router.delete("/bulk/properties")
@@ -172,8 +149,9 @@ def bulk_delete_relationships(payload: BulkDeleteRequest):
     query = """
     MATCH ()-[r]->()
     WHERE toString(id(r)) IN $ids
-    DELETE r
-    RETURN count(r) AS deleted
+    WITH collect(r) AS relationships, count(r) AS deleted
+    FOREACH (rel IN relationships | DELETE rel)
+    RETURN deleted
     """
 
     with get_driver().session() as session:
@@ -181,19 +159,88 @@ def bulk_delete_relationships(payload: BulkDeleteRequest):
         return {"deleted": record["deleted"]}
 
 
+@router.patch("/{relationship_id}/properties")
+def update_relationship_properties(
+    relationship_id: str,
+    payload: UpdatePropertiesRequest,
+):
+    set_clause = build_set_clause("r", payload.properties)
+
+    query = f"""
+    MATCH ()-[r]->()
+    WHERE id(r) = toInteger($id)
+    SET {set_clause}
+    RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
+    """
+
+    params = {
+        "id": relationship_id,
+        **payload.properties,
+    }
+
+    with get_driver().session() as session:
+        record = session.run(query, **params).single()
+
+        if record is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Relación no encontrada",
+            )
+
+        return relationship_to_dict(
+            record["r"],
+            record["startNodeId"],
+            record["endNodeId"],
+        )
+
+
+@router.delete("/{relationship_id}/properties")
+def delete_relationship_properties(
+    relationship_id: str,
+    payload: DeletePropertiesRequest,
+):
+    remove_clause = build_remove_clause("r", payload.keys)
+
+    query = f"""
+    MATCH ()-[r]->()
+    WHERE id(r) = toInteger($id)
+    REMOVE {remove_clause}
+    RETURN r, startNode(r).id AS startNodeId, endNode(r).id AS endNodeId
+    """
+
+    with get_driver().session() as session:
+        record = session.run(query, id=relationship_id).single()
+
+        if record is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Relación no encontrada",
+            )
+
+        return relationship_to_dict(
+            record["r"],
+            record["startNodeId"],
+            record["endNodeId"],
+        )
+
+
 @router.delete("/{relationship_id}")
 def delete_relationship(relationship_id: str):
     query = """
     MATCH ()-[r]->()
     WHERE id(r) = toInteger($id)
+    WITH r, count(r) AS deleted
     DELETE r
-    RETURN count(r) AS deleted
+    RETURN deleted
     """
 
     with get_driver().session() as session:
         record = session.run(query, id=relationship_id).single()
 
         if record["deleted"] == 0:
-            raise HTTPException(status_code=404, detail="Relación no encontrada")
+            raise HTTPException(
+                status_code=404,
+                detail="Relación no encontrada",
+            )
 
-        return {"message": "Relación eliminada"}
+        return

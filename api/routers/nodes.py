@@ -43,6 +43,12 @@ def get_nodes(
         where_clause = f"WHERE toString(n.{prop}) = $value"
         params["value"] = value
 
+    count_query = f"""
+    MATCH (n{label_clause})
+    {where_clause}
+    RETURN count(n) AS total
+    """
+
     query = f"""
     MATCH (n{label_clause})
     {where_clause}
@@ -51,12 +57,6 @@ def get_nodes(
     SKIP $skip
     LIMIT $limit
     RETURN n, labels(n) AS labels
-    """
-
-    count_query = f"""
-    MATCH (n{label_clause})
-    {where_clause}
-    RETURN count(n) AS total
     """
 
     with get_driver().session() as session:
@@ -76,32 +76,21 @@ def get_nodes(
         }
 
 
-@router.get("/{node_id}")
-def get_node_by_id(node_id: str):
-    query = """
-    MATCH (n {id: $id})
-    RETURN n, labels(n) AS labels
-    LIMIT 1
-    """
-
-    with get_driver().session() as session:
-        record = session.run(query, id=node_id).single()
-
-        if record is None:
-            raise HTTPException(status_code=404, detail="Nodo no encontrado")
-
-        return node_to_dict(record["n"], record["labels"])
-
-
 @router.post("")
 def create_node(payload: CreateNodeRequest):
     label = validate_cypher_name(payload.label)
 
     if len(payload.properties) < 5:
-        raise HTTPException(status_code=400, detail="El nodo debe tener al menos 5 propiedades")
+        raise HTTPException(
+            status_code=400,
+            detail="El nodo debe tener al menos 5 propiedades",
+        )
 
     if "id" not in payload.properties:
-        raise HTTPException(status_code=400, detail="El nodo debe incluir propiedad id")
+        raise HTTPException(
+            status_code=400,
+            detail="El nodo debe incluir propiedad id",
+        )
 
     set_clause = build_set_clause("n", payload.properties)
 
@@ -119,10 +108,16 @@ def create_node(payload: CreateNodeRequest):
 @router.post("/multi-label")
 def create_multi_label_node(payload: CreateMultiLabelNodeRequest):
     if len(payload.properties) < 5:
-        raise HTTPException(status_code=400, detail="El nodo debe tener al menos 5 propiedades")
+        raise HTTPException(
+            status_code=400,
+            detail="El nodo debe tener al menos 5 propiedades",
+        )
 
     if "id" not in payload.properties:
-        raise HTTPException(status_code=400, detail="El nodo debe incluir propiedad id")
+        raise HTTPException(
+            status_code=400,
+            detail="El nodo debe incluir propiedad id",
+        )
 
     labels = [validate_cypher_name(label) for label in payload.labels]
     labels_clause = ":" + ":".join(labels)
@@ -137,6 +132,72 @@ def create_multi_label_node(payload: CreateMultiLabelNodeRequest):
 
     with get_driver().session() as session:
         record = session.run(query, **payload.properties).single()
+        return node_to_dict(record["n"], record["labels"])
+
+
+@router.patch("/bulk/properties")
+def bulk_update_node_properties(payload: BulkUpdatePropertiesRequest):
+    set_clause = build_set_clause("n", payload.properties)
+
+    query = f"""
+    MATCH (n)
+    WHERE n.id IN $ids
+    SET {set_clause}
+    RETURN count(n) AS updated
+    """
+
+    params = {"ids": payload.ids, **payload.properties}
+
+    with get_driver().session() as session:
+        record = session.run(query, **params).single()
+        return {"updated": record["updated"]}
+
+
+@router.delete("/bulk/properties")
+def bulk_delete_node_properties(payload: BulkDeletePropertiesRequest):
+    remove_clause = build_remove_clause("n", payload.keys)
+
+    query = f"""
+    MATCH (n)
+    WHERE n.id IN $ids
+    REMOVE {remove_clause}
+    RETURN count(n) AS updated
+    """
+
+    with get_driver().session() as session:
+        record = session.run(query, ids=payload.ids).single()
+        return {"updated": record["updated"]}
+
+
+@router.delete("/bulk")
+def bulk_delete_nodes(payload: BulkDeleteRequest):
+    query = """
+    MATCH (n)
+    WHERE n.id IN $ids
+    WITH collect(n) AS nodes, count(n) AS deleted
+    FOREACH (node IN nodes | DETACH DELETE node)
+    RETURN deleted
+    """
+
+    with get_driver().session() as session:
+        record = session.run(query, ids=payload.ids).single()
+        return {"deleted": record["deleted"]}
+
+
+@router.get("/{node_id}")
+def get_node_by_id(node_id: str):
+    query = """
+    MATCH (n {id: $id})
+    RETURN n, labels(n) AS labels
+    LIMIT 1
+    """
+
+    with get_driver().session() as session:
+        record = session.run(query, id=node_id).single()
+
+        if record is None:
+            raise HTTPException(status_code=404, detail="Nodo no encontrado")
+
         return node_to_dict(record["n"], record["labels"])
 
 
@@ -161,24 +222,6 @@ def update_node_properties(node_id: str, payload: UpdatePropertiesRequest):
         return node_to_dict(record["n"], record["labels"])
 
 
-@router.patch("/bulk/properties")
-def bulk_update_node_properties(payload: BulkUpdatePropertiesRequest):
-    set_clause = build_set_clause("n", payload.properties)
-
-    query = f"""
-    MATCH (n)
-    WHERE n.id IN $ids
-    SET {set_clause}
-    RETURN count(n) AS updated
-    """
-
-    params = {"ids": payload.ids, **payload.properties}
-
-    with get_driver().session() as session:
-        record = session.run(query, **params).single()
-        return {"updated": record["updated"]}
-
-
 @router.delete("/{node_id}/properties")
 def delete_node_properties(node_id: str, payload: DeletePropertiesRequest):
     remove_clause = build_remove_clause("n", payload.keys)
@@ -196,53 +239,6 @@ def delete_node_properties(node_id: str, payload: DeletePropertiesRequest):
             raise HTTPException(status_code=404, detail="Nodo no encontrado")
 
         return node_to_dict(record["n"], record["labels"])
-
-
-@router.delete("/bulk/properties")
-def bulk_delete_node_properties(payload: BulkDeletePropertiesRequest):
-    remove_clause = build_remove_clause("n", payload.keys)
-
-    query = f"""
-    MATCH (n)
-    WHERE n.id IN $ids
-    REMOVE {remove_clause}
-    RETURN count(n) AS updated
-    """
-
-    with get_driver().session() as session:
-        record = session.run(query, ids=payload.ids).single()
-        return {"updated": record["updated"]}
-
-
-@router.delete("/bulk")
-def bulk_delete_nodes(payload: BulkDeleteRequest):
-    query = """
-    MATCH (n)
-    WHERE n.id IN $ids
-    DETACH DELETE n
-    RETURN count(n) AS deleted
-    """
-
-    with get_driver().session() as session:
-        record = session.run(query, ids=payload.ids).single()
-        return {"deleted": record["deleted"]}
-
-
-@router.delete("/{node_id}")
-def delete_node(node_id: str):
-    query = """
-    MATCH (n {id: $id})
-    DETACH DELETE n
-    RETURN count(n) AS deleted
-    """
-
-    with get_driver().session() as session:
-        record = session.run(query, id=node_id).single()
-
-        if record["deleted"] == 0:
-            raise HTTPException(status_code=404, detail="Nodo no encontrado")
-
-        return {"message": "Nodo eliminado"}
 
 
 @router.get("/{node_id}/relationships")
@@ -263,3 +259,21 @@ def get_relationships_for_node(node_id: str):
             )
             for record in result
         ]
+
+
+@router.delete("/{node_id}")
+def delete_node(node_id: str):
+    query = """
+    MATCH (n {id: $id})
+    WITH n, count(n) AS deleted
+    DETACH DELETE n
+    RETURN deleted
+    """
+
+    with get_driver().session() as session:
+        record = session.run(query, id=node_id).single()
+
+        if record["deleted"] == 0:
+            raise HTTPException(status_code=404, detail="Nodo no encontrado")
+
+        return
