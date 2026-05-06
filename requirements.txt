@@ -4,3 +4,5 @@ neo4j
 python-dotenv
 pydantic
 python-multipart
+pandas
+scikit-learn

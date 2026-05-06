@@ -6,6 +6,4 @@ router = APIRouter(prefix="/api/ds", tags=["Data Science"])
 
 @router.get("/clusters")
 def clusters():
-    return {
-        "clusters": get_client_clusters()
-    }
+    return get_client_clusters()
