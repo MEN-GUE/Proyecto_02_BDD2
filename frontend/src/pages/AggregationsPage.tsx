@@ -15,22 +15,25 @@ const LABEL_ICONS: Record<string, string> = {
 export default function AggregationsPage() {
   const [nodeCounts, setNodeCounts] = useState<AggregationItem[]>([])
   const [orderStatus, setOrderStatus] = useState<AggregationItem[]>([])
-  const [segments, setSegments] = useState<AggregationItem[]>([])
-  const [supplierRating, setSupplierRating] = useState<AggregationItem[]>([])
+  const [topClients, setTopClients] = useState<AggregationItem[]>([])
+  const [productsByCategory, setProductsByCategory] = useState<AggregationItem[]>([])
+  const [topProducts, setTopProducts] = useState<AggregationItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       getNodeCounts(),
-      getAggregation('order-status'),
-      getAggregation('client-segments'),
-      getAggregation('supplier-rating'),
-    ]).then(([counts, status, segs, ratings]) => {
-      setNodeCounts(counts)
-      setOrderStatus(status)
-      setSegments(segs)
-      setSupplierRating(ratings)
-    }).catch(() => {}).finally(() => setLoading(false))
+      getAggregation('orders-by-status'),
+      getAggregation('top-clients'),
+      getAggregation('products-by-category'),
+      getAggregation('top-products'),
+    ]).then(([counts, status, clients, byCategory, products]) => {
+      if (counts.status === 'fulfilled') setNodeCounts(counts.value)
+      if (status.status === 'fulfilled') setOrderStatus(status.value)
+      if (clients.status === 'fulfilled') setTopClients(clients.value)
+      if (byCategory.status === 'fulfilled') setProductsByCategory(byCategory.value)
+      if (products.status === 'fulfilled') setTopProducts(products.value)
+    }).finally(() => setLoading(false))
   }, [])
 
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>
@@ -42,7 +45,7 @@ export default function AggregationsPage() {
         <p className="text-sm text-gray-500 mt-1">Resumen visual de los datos en la base de datos</p>
       </div>
 
-      {/* Node counts */}
+      {/* Node counts by label */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Nodos por Etiqueta</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -53,23 +56,23 @@ export default function AggregationsPage() {
         </div>
       </div>
 
-      {/* Charts row 1 */}
+      {/* Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {orderStatus.length > 0 && (
           <BarChartWidget data={orderStatus} title="Órdenes por Estado" color="#f59e0b" />
         )}
-        {segments.length > 0 && (
-          <PieChartWidget data={segments} title="Clientes por Segmento" />
+        {topClients.length > 0 && (
+          <BarChartWidget data={topClients} title="Top 10 Clientes por Total de Compras" color="#6366f1" />
         )}
       </div>
 
-      {/* Charts row 2 */}
+      {/* Row 2 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {supplierRating.length > 0 && (
-          <BarChartWidget data={supplierRating} title="Proveedores por Calificación" color="#6366f1" />
+        {productsByCategory.length > 0 && (
+          <PieChartWidget data={productsByCategory} title="Productos por Categoría" />
         )}
-        {nodeCounts.length > 0 && (
-          <BarChartWidget data={nodeCounts} title="Distribución de Nodos" color="#22c55e" />
+        {topProducts.length > 0 && (
+          <BarChartWidget data={topProducts} title="Top 10 Productos más Ordenados" color="#22c55e" />
         )}
       </div>
     </div>

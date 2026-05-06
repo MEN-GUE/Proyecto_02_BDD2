@@ -45,6 +45,16 @@ export default function CsvUploadPage() {
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Importa nodos y relaciones desde un archivo CSV</p>
       </div>
 
+      {/* Requirements notice */}
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+        <p className="font-semibold mb-1">⚠️ Requisitos del archivo CSV</p>
+        <ul className="list-disc list-inside text-xs space-y-1 text-yellow-700 dark:text-yellow-400">
+          <li>Debe contener una columna <code className="font-mono bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded">id</code> como identificador único</li>
+          <li>El resto de columnas se convierten en propiedades del nodo</li>
+          <li>Usa <code className="font-mono bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded">MERGE</code> internamente — si el ID ya existe, actualiza las propiedades</li>
+        </ul>
+      </div>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Drop zone */}
         <div

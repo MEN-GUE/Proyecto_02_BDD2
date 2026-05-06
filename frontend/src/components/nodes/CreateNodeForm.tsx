@@ -22,10 +22,13 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
   const { toast } = useToast()
   const [selectedLabels, setSelectedLabels] = useState<NodeLabel[]>([])
   const [customLabel, setCustomLabel] = useState('')
-  const [rows, setRows] = useState<PropRow[]>([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()])
+  const [nodeId, setNodeId] = useState('')
+  const [rows, setRows] = useState<PropRow[]>([emptyRow(), emptyRow(), emptyRow(), emptyRow()])
   const [loading, setLoading] = useState(false)
 
-  const filledRows = rows.filter((r) => r.key.trim())
+  // id field + filled extra rows = total props; need >= 5 total
+  const extraFilled = rows.filter((r) => r.key.trim()).length
+  const totalFilled = (nodeId.trim() ? 1 : 0) + extraFilled
   const isMultiLabel = (selectedLabels.length + (customLabel.trim() ? 1 : 0)) > 1
 
   function toggleLabel(label: NodeLabel) {
@@ -35,7 +38,7 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
   }
 
   function updateRow(i: number, field: keyof PropRow, val: string) {
-    setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: val } : r)))
   }
 
   function coerce(val: string, type: PropType): unknown {
@@ -50,13 +53,15 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
     const labels: string[] = [...selectedLabels]
     if (customLabel.trim()) labels.push(customLabel.trim())
     if (labels.length === 0) { toast('Selecciona al menos una etiqueta', 'error'); return }
+    if (!nodeId.trim()) { toast('El campo ID es obligatorio', 'error'); return }
 
-    const properties: Record<string, unknown> = {}
+    const properties: Record<string, unknown> = { id: nodeId.trim() }
     for (const row of rows) {
       if (row.key.trim()) properties[row.key.trim()] = coerce(row.value, row.type)
     }
+
     if (Object.keys(properties).length < 5) {
-      toast('Se requieren al menos 5 propiedades con clave', 'error')
+      toast('Se requieren al menos 5 propiedades en total (incluyendo id)', 'error')
       return
     }
 
@@ -65,8 +70,8 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
       await createNode(labels, properties)
       toast(`Nodo ${labels.join('+')} creado exitosamente`, 'success')
       onSuccess()
-    } catch (e) {
-      toast((e as Error).message, 'error')
+    } catch (err) {
+      toast((err as Error).message, 'error')
     } finally {
       setLoading(false)
     }
@@ -74,7 +79,7 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      {/* Labels section */}
+      {/* Labels */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Etiquetas
@@ -108,18 +113,33 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
         />
       </div>
 
-      {/* Properties section */}
+      {/* ID field — required by API */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          ID del nodo <span className="text-red-500">*</span>
+          <span className="ml-2 text-xs font-normal text-gray-400">Identificador único requerido</span>
+        </label>
+        <input
+          value={nodeId}
+          onChange={(e) => setNodeId(e.target.value)}
+          placeholder="ej: PROD-001, CLI-042, …"
+          required
+          className="h-9 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+      </div>
+
+      {/* Extra properties */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Propiedades
+            Propiedades adicionales
           </label>
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            filledRows.length >= 5
+            totalFilled >= 5
               ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
               : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
           }`}>
-            {filledRows.length} / 5 requeridas
+            {totalFilled} / 5 requeridas
           </span>
         </div>
         <div className="flex flex-col gap-2">
@@ -148,7 +168,7 @@ export default function CreateNodeForm({ onSuccess }: CreateNodeFormProps) {
                 <option value="date">fecha</option>
                 <option value="list">lista</option>
               </select>
-              {i >= 5 && (
+              {i >= 4 && (
                 <button
                   type="button"
                   onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
