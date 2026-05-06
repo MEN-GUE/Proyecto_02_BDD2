@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import type { ClientCluster } from '../../types/cluster'
+import type { ProveedorCluster } from '../../types/cluster'
 
 const CLUSTER_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6']
 
-export default function ClusterTable({ clients }: { clients: ClientCluster[] }) {
+export default function ClusterTable({ providers }: { providers: ProveedorCluster[] }) {
   const [search, setSearch] = useState('')
   const [filterCluster, setFilterCluster] = useState<number | null>(null)
-  const clusters = [...new Set(clients.map((c) => c.cluster))].sort()
+  const clusterIds = [...new Set(providers.map((p) => p.cluster_id))].sort()
 
-  const filtered = clients.filter((c) => {
-    const matchSearch = c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      c.segmento.toLowerCase().includes(search.toLowerCase())
-    const matchCluster = filterCluster === null || c.cluster === filterCluster
+  const filtered = providers.filter((p) => {
+    const matchSearch =
+      p.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      p.pais.toLowerCase().includes(search.toLowerCase())
+    const matchCluster = filterCluster === null || p.cluster_id === filterCluster
     return matchSearch && matchCluster
   })
 
@@ -21,18 +22,31 @@ export default function ClusterTable({ clients }: { clients: ClientCluster[] }) 
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar cliente o segmento…"
+          placeholder="Buscar proveedor o pais..."
           className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 focus:outline-none focus:ring-2 focus:ring-green-500 w-64"
         />
-        <div className="flex gap-1">
-          <button onClick={() => setFilterCluster(null)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCluster === null ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}>
+        <div className="flex gap-1 flex-wrap">
+          <button
+            onClick={() => setFilterCluster(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              filterCluster === null
+                ? 'bg-gray-800 text-white border-gray-800'
+                : 'border-gray-300 text-gray-600 hover:border-gray-500'
+            }`}
+          >
             Todos
           </button>
-          {clusters.map((c) => (
-            <button key={c} onClick={() => setFilterCluster(filterCluster === c ? null : c)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCluster === c ? 'text-white border-transparent' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
-              style={filterCluster === c ? { backgroundColor: CLUSTER_COLORS[c % CLUSTER_COLORS.length] } : {}}>
+          {clusterIds.map((c) => (
+            <button
+              key={c}
+              onClick={() => setFilterCluster(filterCluster === c ? null : c)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterCluster === c
+                  ? 'text-white border-transparent'
+                  : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+              style={filterCluster === c ? { backgroundColor: CLUSTER_COLORS[c % CLUSTER_COLORS.length] } : {}}
+            >
               Cluster {c}
             </button>
           ))}
@@ -42,26 +56,28 @@ export default function ClusterTable({ clients }: { clients: ClientCluster[] }) 
         <table className="w-full text-xs">
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase">
             <tr>
-              <th className="px-3 py-2 text-left">Cliente</th>
-              <th className="px-3 py-2 text-left">Segmento</th>
-              <th className="px-3 py-2 text-right">Crédito</th>
-              <th className="px-3 py-2 text-right">Órdenes</th>
-              <th className="px-3 py-2 text-right">Gastado</th>
+              <th className="px-3 py-2 text-left">Proveedor</th>
+              <th className="px-3 py-2 text-left">Pais</th>
+              <th className="px-3 py-2 text-right">Calificacion</th>
+              <th className="px-3 py-2 text-right">Productos</th>
+              <th className="px-3 py-2 text-right">Ratio Contratos</th>
               <th className="px-3 py-2 text-center">Cluster</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {filtered.slice(0, 100).map((c) => (
-              <tr key={c.clientId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">{c.nombre}</td>
-                <td className="px-3 py-2 text-gray-500">{c.segmento}</td>
-                <td className="px-3 py-2 text-right">Q{c.creditoAprobado.toLocaleString()}</td>
-                <td className="px-3 py-2 text-right">{c.totalOrdenes}</td>
-                <td className="px-3 py-2 text-right">Q{c.totalGastado.toLocaleString()}</td>
+            {filtered.slice(0, 100).map((p) => (
+              <tr key={p.proveedor_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">{p.nombre}</td>
+                <td className="px-3 py-2 text-gray-500">{p.pais}</td>
+                <td className="px-3 py-2 text-right">{p.calificacion_proveedor?.toFixed(1)}</td>
+                <td className="px-3 py-2 text-right">{p.total_productos}</td>
+                <td className="px-3 py-2 text-right">{(p.ratio_contratos * 100).toFixed(1)}%</td>
                 <td className="px-3 py-2 text-center">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold"
-                    style={{ backgroundColor: CLUSTER_COLORS[c.cluster % CLUSTER_COLORS.length] }}>
-                    {c.cluster}
+                  <span
+                    className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold"
+                    style={{ backgroundColor: CLUSTER_COLORS[p.cluster_id % CLUSTER_COLORS.length] }}
+                  >
+                    {p.cluster_id}
                   </span>
                 </td>
               </tr>
@@ -69,7 +85,9 @@ export default function ClusterTable({ clients }: { clients: ClientCluster[] }) 
           </tbody>
         </table>
         {filtered.length > 100 && (
-          <p className="text-xs text-center text-gray-400 py-2">Mostrando 100 de {filtered.length} resultados</p>
+          <p className="text-xs text-center text-gray-400 py-2">
+            Mostrando 100 de {filtered.length} resultados
+          </p>
         )}
       </div>
     </div>
