@@ -1,30 +1,22 @@
-export interface ProveedorCluster {
-  proveedor_id: string
+export interface ClientCluster {
+  clientId: string
   nombre: string
-  pais: string
-  calificacion_proveedor: number
-  fecha_registro: string
-  activo: boolean
-  total_productos: number
-  precio_promedio: number
-  plazo_entrega_promedio: number
-  precio_acordado_promedio: number
-  ratio_contratos: number
-  diversidad_categorias: number
-  capacidad_almacen_total: number
-  antiguedad_dias: number
-  cluster_id: number
-  cluster_label: string
+  segmento: string
+  creditoAprobado: number
+  totalOrdenes: number
+  totalGastado: number
+  cluster: number
 }
 
 export interface ClusterMeta {
-  cluster_id: number
-  cluster_label: string
+  cluster: number
+  label: string
   count: number
-  avg_calificacion: number
-  avg_productos: number
+  avgCredito: number
+  avgOrdenes: number
 }
 
 export interface ClustersResponse {
-  clusters: ProveedorCluster[]
+  clients: ClientCluster[]
+  meta: ClusterMeta[]
 }
