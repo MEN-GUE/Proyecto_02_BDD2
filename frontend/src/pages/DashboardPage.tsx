@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { getNodeCounts } from '../api/aggregations'
 import type { AggregationItem } from '../api/aggregations'
 import StatCard from '../components/aggregations/StatCard'
@@ -25,15 +25,17 @@ const quickActions = [
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [counts, setCounts] = useState<AggregationItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setLoading(true)
     getNodeCounts()
       .then(setCounts)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [location.key])
 
   const total = counts.reduce((s, c) => s + c.value, 0)
 
